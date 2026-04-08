@@ -13,10 +13,13 @@ jobs:
         with:
           node-version: 18
       - name: Run Engine
-        env:
+env:
           AZ_URL: ${{ secrets.AZ_URL }}
           AZ_KEY: ${{ secrets.AZ_KEY }}
           AZ_STATION_ID: ${{ secrets.AZ_STATION_ID }}
           AZ_PLAYLIST_ID: ${{ secrets.AZ_PLAYLIST_ID }}
           OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+          WP_URL: ${{ secrets.WP_URL }}
+          WP_USER: ${{ secrets.WP_USER }}
+          WP_APP_PASS: ${{ secrets.WP_APP_PASS }}
         run: node engine.js
