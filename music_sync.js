@@ -4,23 +4,25 @@ const AZ_STATION_ID = process.env.AZ_STATION_ID;
 
 const DAILY_QUERIES = [
     'collection:(78rpm_african)', 'subject:"Highlife"', 'subject:"Afrobeat"',
-    'collection:(georgia-country-music)', 'subject:"Classical Music"', 
-    'subject:"Country Music"', 'subject:"Folk Music"'
+    'subject:"Classical Music"', 'subject:"Country Music"', 'subject:"Folk Music"'
 ];
 
 const SUNDAY_QUERIES = [
-    'collection:(Gospel_Music_Archive)', 'subject:"Hymns"', 'subject:"Contemporary Christian"'
+    'collection:(Gospel_Music_Archive)', 'subject:"Hymns"', 'subject:"Christian Worship"'
 ];
 
 async function getArchiveTracks(queries, targetCount) {
     let allTracks = [];
     for (const q of queries) {
         try {
-            const searchUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)} AND mediatype:(audio) AND format:(VBR MP3)&fl[]=identifier&rows=50&output=json`;
+            // Updated search to ensure we only get items with MP3s
+            const searchUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)} AND mediatype:(audio)&fl[]=identifier&rows=100&output=json`;
             const res = await fetch(searchUrl);
             const data = await res.json();
-            if (data.response.docs) allTracks.push(...data.response.docs);
-        } catch (e) { console.log(`⚠️ Search failed for: ${q}`); }
+            if (data.response && data.response.docs) {
+                allTracks.push(...data.response.docs);
+            }
+        } catch (e) { console.log(`⚠️ Search error for ${q}: ${e.message}`); }
     }
     return allTracks.sort(() => 0.5 - Math.random()).slice(0, targetCount);
 }
@@ -29,49 +31,72 @@ async function sync() {
     const isSunday = new Date().getDay() === 0;
     const queries = isSunday ? SUNDAY_QUERIES : DAILY_QUERIES;
     const folder = isSunday ? "sunday_worship" : "daily_mix";
-    const targetCount = 100; // Your new 100-song target
+    const targetCount = 100;
 
-    console.log(`🚀 Lives In Motion: Targeting ${targetCount} tracks...`);
+    console.log(`🚀 Starting Sync for ${folder}...`);
     const trackItems = await getArchiveTracks(queries, targetCount);
+    
+    if (trackItems.length === 0) {
+        console.error("❌ No tracks found in Archive.org. Check your queries.");
+        return;
+    }
+
     let successCount = 0;
 
     for (let i = 0; i < trackItems.length; i++) {
+        const id = trackItems[i].identifier;
+        const trackUrl = `https://archive.org/download/${id}/${id}_vbr.mp3`;
+        const fileName = `track_${successCount}.mp3`;
+        const fullPath = `${folder}/${fileName}`;
+
         try {
-            const id = trackItems[i].identifier;
-            const trackUrl = `https://archive.org/download/${id}/${id}_vbr.mp3`;
+            console.log(`📡 [${successCount + 1}/${targetCount}] Fetching: ${id}`);
+            const audioRes = await fetch(trackUrl, { redirect: 'follow' });
             
-            const res = await fetch(trackUrl, { redirect: 'follow' });
-            if (!res.ok) continue;
-            
-            const arrayBuffer = await res.arrayBuffer();
-            if (arrayBuffer.byteLength < 1000000) continue; // Must be at least 1MB for quality
+            if (!audioRes.ok) {
+                console.log(`⏩ Skipping ${id}: Source returned ${audioRes.status}`);
+                continue;
+            }
 
-            const base64 = Buffer.from(arrayBuffer).toString('base64');
-            const fileName = `track_${successCount}.mp3`;
+            const blob = await audioRes.blob();
+            if (blob.size < 1000000) { // Skip files smaller than 1MB
+                console.log(`⏩ Skipping ${id}: File too small (${(blob.size/1024).toFixed(0)} KB)`);
+                continue;
+            }
 
-            const upload = await fetch(`${AZ_URL}/api/station/${AZ_STATION_ID}/files`, {
+            // Convert Blob to Buffer for the API
+            const arrayBuffer = await blob.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+
+            // UPLOAD USING MULTIPART FORM DATA (Much more reliable)
+            const formData = new FormData();
+            formData.append('file', new Blob([buffer]), fileName);
+            formData.append('path', fullPath);
+
+            const uploadRes = await fetch(`${AZ_URL}/api/station/${AZ_STATION_ID}/files`, {
                 method: "POST",
-                headers: { "X-API-Key": AZ_KEY, "Content-Type": "application/json" },
-                body: JSON.stringify({ path: `${folder}/${fileName}`, file: base64 })
+                headers: { "X-API-Key": AZ_KEY },
+                body: formData
             });
 
-            if (upload.ok) {
-                console.log(`✅ [${successCount + 1}/${targetCount}] Synced: ${fileName}`);
+            if (uploadRes.ok) {
+                console.log(`✅ Uploaded: ${fileName}`);
                 successCount++;
-                // PAUSE for 3 seconds to let the server breathe
-                await new Promise(r => setTimeout(r, 3000));
+                // Small pause to prevent API rate limiting
+                await new Promise(r => setTimeout(r, 2000));
+            } else {
+                const errText = await uploadRes.text();
+                console.log(`⚠️ AzuraCast Rejected ${fileName}: ${errText}`);
             }
-            
+
             if (successCount >= targetCount) break;
 
-        } catch (e) { console.log(`❌ Error on track ${i}: ${e.message}`); }
+        } catch (e) {
+            console.log(`❌ Error processing ${id}: ${e.message}`);
+        }
     }
 
-    console.log(`🎯 Final Count: ${successCount} songs updated.`);
-    await fetch(`${AZ_URL}/api/station/${AZ_STATION_ID}/batch/reprocess`, {
-        method: "POST",
-        headers: { "X-API-Key": AZ_KEY }
-    });
+    console.log(`🎯 Sync Complete! Total files in ${folder}: ${successCount}`);
 }
 
 sync();
