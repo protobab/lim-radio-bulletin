@@ -11,92 +11,79 @@ const SUNDAY_QUERIES = [
     'collection:(Gospel_Music_Archive)', 'subject:"Hymns"', 'subject:"Christian Worship"'
 ];
 
-async function getArchiveTracks(queries, targetCount) {
-    let allTracks = [];
-    for (const q of queries) {
-        try {
-            // Updated search to ensure we only get items with MP3s
-            const searchUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)} AND mediatype:(audio)&fl[]=identifier&rows=100&output=json`;
-            const res = await fetch(searchUrl);
-            const data = await res.json();
-            if (data.response && data.response.docs) {
-                allTracks.push(...data.response.docs);
-            }
-        } catch (e) { console.log(`⚠️ Search error for ${q}: ${e.message}`); }
-    }
-    return allTracks.sort(() => 0.5 - Math.random()).slice(0, targetCount);
-}
-
 async function sync() {
     const isSunday = new Date().getDay() === 0;
     const queries = isSunday ? SUNDAY_QUERIES : DAILY_QUERIES;
-    const folder = isSunday ? "sunday_worship" : "daily_mix";
+    const folderName = isSunday ? "sunday_worship" : "daily_mix";
     const targetCount = 100;
 
-    console.log(`🚀 Starting Sync for ${folder}...`);
-    const trackItems = await getArchiveTracks(queries, targetCount);
-    
-    if (trackItems.length === 0) {
-        console.error("❌ No tracks found in Archive.org. Check your queries.");
-        return;
+    console.log(`🚀 Starting Sync for ${folderName}...`);
+
+    // 1. Create the folder first (Prevents 404 errors)
+    try {
+        await fetch(`${AZ_URL}/api/station/${AZ_STATION_ID}/directory`, {
+            method: "POST",
+            headers: { "X-API-Key": AZ_KEY, "Content-Type": "application/json" },
+            body: JSON.stringify({ name: folderName })
+        });
+    } catch (e) { console.log("Folder check done."); }
+
+    // 2. Fetch tracks from Archive.org
+    let allIdentifiers = [];
+    for (const q of queries) {
+        const res = await fetch(`https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)} AND mediatype:(audio)&fl[]=identifier&rows=150&output=json`);
+        const data = await res.json();
+        if (data.response?.docs) allIdentifiers.push(...data.response.docs);
     }
 
+    const shuffled = allIdentifiers.sort(() => 0.5 - Math.random()).slice(0, targetCount);
     let successCount = 0;
 
-    for (let i = 0; i < trackItems.length; i++) {
-        const id = trackItems[i].identifier;
+    for (let i = 0; i < shuffled.length; i++) {
+        const id = shuffled[i].identifier;
         const trackUrl = `https://archive.org/download/${id}/${id}_vbr.mp3`;
-        const fileName = `track_${successCount}.mp3`;
-        const fullPath = `${folder}/${fileName}`;
 
         try {
             console.log(`📡 [${successCount + 1}/${targetCount}] Fetching: ${id}`);
-            const audioRes = await fetch(trackUrl, { redirect: 'follow' });
-            
-            if (!audioRes.ok) {
-                console.log(`⏩ Skipping ${id}: Source returned ${audioRes.status}`);
-                continue;
-            }
+            const audioRes = await fetch(trackUrl);
+            if (!audioRes.ok) continue;
 
-            const blob = await audioRes.blob();
-            if (blob.size < 1000000) { // Skip files smaller than 1MB
-                console.log(`⏩ Skipping ${id}: File too small (${(blob.size/1024).toFixed(0)} KB)`);
-                continue;
-            }
+            const arrayBuffer = await audioRes.arrayBuffer();
+            if (arrayBuffer.byteLength < 1000000) continue; // Skip files < 1MB
 
-            // Convert Blob to Buffer for the API
-            const arrayBuffer = await blob.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-
-            // UPLOAD USING MULTIPART FORM DATA (Much more reliable)
-            const formData = new FormData();
-            formData.append('file', new Blob([buffer]), fileName);
-            formData.append('path', fullPath);
+            const base64 = Buffer.from(arrayBuffer).toString('base64');
+            const fileName = `track_${successCount}.mp3`;
 
             const uploadRes = await fetch(`${AZ_URL}/api/station/${AZ_STATION_ID}/files`, {
                 method: "POST",
-                headers: { "X-API-Key": AZ_KEY },
-                body: formData
+                headers: { "X-API-Key": AZ_KEY, "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    path: `${folderName}/${fileName}`, 
+                    file: base64 
+                })
             });
 
             if (uploadRes.ok) {
-                console.log(`✅ Uploaded: ${fileName}`);
+                console.log(`✅ Uploaded ${fileName}`);
                 successCount++;
-                // Small pause to prevent API rate limiting
-                await new Promise(r => setTimeout(r, 2000));
+                await new Promise(r => setTimeout(r, 2000)); // 2-second gap
             } else {
-                const errText = await uploadRes.text();
-                console.log(`⚠️ AzuraCast Rejected ${fileName}: ${errText}`);
+                const err = await uploadRes.text();
+                console.log(`⚠️ Failed ${fileName}: ${err}`);
             }
 
             if (successCount >= targetCount) break;
 
-        } catch (e) {
-            console.log(`❌ Error processing ${id}: ${e.message}`);
-        }
+        } catch (e) { console.log(`❌ Error: ${e.message}`); }
     }
 
-    console.log(`🎯 Sync Complete! Total files in ${folder}: ${successCount}`);
+    console.log(`🎯 Sync Complete! Total: ${successCount}`);
+    
+    // Reprocess Media
+    await fetch(`${AZ_URL}/api/station/${AZ_STATION_ID}/batch/reprocess`, {
+        method: "POST",
+        headers: { "X-API-Key": AZ_KEY }
+    });
 }
 
 sync();
