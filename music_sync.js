@@ -19,34 +19,33 @@ async function sync() {
     const sources = isSunday ? SUNDAY_URLS : DAILY_URLS;
     const folder = isSunday ? "sunday_worship" : "daily_mix";
 
-    console.log(`🎵 Syncing ${folder} for Lives In Motion... (Today is ${isSunday ? 'Sunday' : 'a Weekday'})`);
+    console.log(`🎵 Syncing ${folder} for Lives In Motion...`);
 
     for (let i = 0; i < sources.length; i++) {
         try {
-            console.log(`⏳ Fetching track ${i} from source...`);
             const res = await fetch(sources[i]);
-            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-            
             const buffer = await res.arrayBuffer();
             const base64 = Buffer.from(buffer).toString('base64');
             const fileName = `track_${i}.mp3`;
 
-            console.log(`📤 Uploading ${fileName} to AzuraCast folder: ${folder}...`);
-            const uploadRes = await fetch(`${AZ_URL}/api/station/${AZ_STATION_ID}/files`, {
+            await fetch(`${AZ_URL}/api/station/${AZ_STATION_ID}/files`, {
                 method: "POST",
                 headers: { "X-API-Key": AZ_KEY, "Content-Type": "application/json" },
                 body: JSON.stringify({ path: `${folder}/${fileName}`, file: base64 })
             });
-
-            if (uploadRes.ok) {
-                console.log(`✅ Successfully synced ${fileName}`);
-            } else {
-                const errText = await uploadRes.text();
-                console.log(`⚠️ AzuraCast Upload Failed: ${errText}`);
-            }
-        } catch (e) {
-            console.log(`❌ Error on track ${i}: ${e.message}`);
-        }
+            console.log(`✅ Uploaded ${fileName}`);
+        } catch (e) { console.log(`❌ Error: ${e.message}`); }
     }
+
+    // --- NEW: THE AUTO-RESCAN TRIGGER ---
+    console.log("🔄 Requesting AzuraCast Media Rescan...");
+    try {
+        const scanRes = await fetch(`${AZ_URL}/api/station/${AZ_STATION_ID}/batch/reprocess`, {
+            method: "POST",
+            headers: { "X-API-Key": AZ_KEY }
+        });
+        if (scanRes.ok) console.log("🎯 Rescan triggered! Your playlists should now populate.");
+        else console.log("⚠️ Rescan failed. You may need to manually click 'Rescan' in Media Manager once.");
+    } catch (e) { console.log("⚠️ Rescan API error."); }
 }
 sync();
