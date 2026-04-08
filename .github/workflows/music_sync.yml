@@ -1,0 +1,17 @@
+name: Music Sync
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Every night at midnight
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: node music_sync.js
+        env:
+          AZ_URL: ${{ secrets.AZ_URL }}
+          AZ_KEY: ${{ secrets.AZ_KEY }}
+          AZ_STATION_ID: ${{ secrets.AZ_STATION_ID }}
