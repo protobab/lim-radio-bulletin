@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: '20'
       - name: Generate M3U
-        run: node music_engine.js # Ensure this matches your filename!
+        run: node engine.js # Ensure this matches your filename!
       - name: Commit and Push M3U
         run: |
           git config --global user.name "Lives In Motion Bot"
