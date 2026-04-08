@@ -9,16 +9,17 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Allows GitHub to save the file
+      contents: write # CRITICAL: Allows GitHub to save the .m3u file back to your repo
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: node music_engine.js
+      - name: Generate M3U
+        run: node music_engine.js # Ensure this matches your filename!
       - name: Commit and Push M3U
         run: |
-          git config --global user.name "Abiola Hassan Chidi"
+          git config --global user.name "Lives In Motion Bot"
           git config --global user.email "bot@livesinmotion.com"
           git add *.m3u
           git commit -m "Refresh Daily Music" || exit 0
