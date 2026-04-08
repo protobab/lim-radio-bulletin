@@ -2,23 +2,19 @@ name: Music Library Sync
 
 on:
   schedule:
-    - cron: '0 0 * * *' # Runs at midnight every day
-  workflow_dispatch: # Allows you to click "Run" manually for this test
+    - cron: '0 0 * * *'
+  workflow_dispatch:
 
 jobs:
   sync-music:
     runs-on: ubuntu-latest
+    timeout-minutes: 60 # Extension for 100 songs
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Setup Node
-        uses: actions/setup-node@v3
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
         with:
           node-version: '18'
-
-      - name: Run Music Sync
-        run: node music_sync.js
+      - run: node music_sync.js
         env:
           AZ_URL: ${{ secrets.AZ_URL }}
           AZ_KEY: ${{ secrets.AZ_KEY }}
