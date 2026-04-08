@@ -3,7 +3,8 @@ const AZ_KEY = process.env.AZ_KEY;
 const AZ_STATION_ID = process.env.AZ_STATION_ID;
 const OPENAI_KEY = process.env.OPENAI_KEY;
 const PLAYLIST_ID = process.env.AZ_PLAYLIST_ID;
-const WP_URL = process.env.WP_URL?.replace(/\/$/, '');
+// Added safety checks for WordPress variables
+const WP_URL = process.env.WP_URL ? process.env.WP_URL.replace(/\/$/, '') : null;
 const WP_USER = process.env.WP_USER;
 const WP_APP_PASS = process.env.WP_APP_PASS;
 
@@ -16,7 +17,7 @@ const RSS_FEEDS = [
 ];
 
 async function run() {
-    console.log("🚀 Starting Abiola Hassan Chidi Full Automation...");
+    console.log("🚀 Starting Lives In Motion: Abiola Hassan Chidi Full Automation...");
 
     try {
         // 1. Fetch Exchange Rates
@@ -47,10 +48,10 @@ async function run() {
                 model: "gpt-4o-mini",
                 messages: [{ 
                     role: "system", 
-                    content: `You are Abiola Hassan Chidi. Write a professional 450-word broadcast script.
+                    content: `You are Abiola Hassan Chidi, the AI news anchor for Lives In Motion radio. Write a professional 450-word broadcast script.
                     Structure: 1. Intro, 2. News (${headlines}), 3. Money Minute (${forexData}), 4. Global Weather (Lagos/London/Houston), 5. Heritage Fact, 6. Proverb & Sign-off.`
                 },
-                { role: "user", content: "Write today's broadcast script." }]
+                { role: "user", content: "Write today's broadcast script for Lives In Motion." }]
             })
         });
         const gptData = await gptRes.json();
@@ -80,10 +81,15 @@ async function run() {
             headers: { "X-API-Key": AZ_KEY, "Content-Type": "application/json" },
             body: JSON.stringify({ playlists: [parseInt(PLAYLIST_ID)] })
         });
-        console.log("📻 Audio live on AzuraCast.");
+        console.log("📻 Audio live on Lives In Motion.");
 
         // 5. AUTO-BLOGGING: Post script to WordPress
-        console.log("🌐 Publishing to WordPress...");
+        if (!WP_URL || !WP_USER || !WP_APP_PASS) {
+            console.log("⚠️ WordPress secrets missing in Workflow. Skipping blog post.");
+            return;
+        }
+
+        console.log(`🌐 Publishing to ${WP_URL}...`);
         const auth = Buffer.from(`${WP_USER}:${WP_APP_PASS}`).toString('base64');
         const wpRes = await fetch(`${WP_URL}/wp-json/wp/v2/posts`, {
             method: "POST",
@@ -92,15 +98,17 @@ async function run() {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                title: `Daily Update: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+                title: `Lives In Motion Update: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
                 content: `<p>${script.replace(/\n/g, '</p><p>')}</p>`,
-                status: 'publish',
-                categories: [1] // Change this ID if you want a specific category
+                status: 'publish'
             })
         });
 
         if (wpRes.ok) console.log("🎯 Blog post published successfully!");
-        else console.log("⚠️ WordPress posting failed.");
+        else {
+            const err = await wpRes.text();
+            console.log(`⚠️ WordPress failed: ${wpRes.status} - ${err}`);
+        }
 
     } catch (err) {
         console.error("❌ Automation Failed:", err.message);
