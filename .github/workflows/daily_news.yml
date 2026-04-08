@@ -1,19 +1,26 @@
-name: Run Daily Bulletin
+name: Daily News Bulletin
+
 on:
   schedule:
-    - cron: '0 6,12,16,20 * * *' # Runs at 6am, 12pm, 4pm, 8pm UTC
-  workflow_dispatch: # Allows you to run it manually for testing
+    - cron: '0 6,12,16,20 * * *' # 7am, 1pm, 5pm, 9pm WAT
+  workflow_dispatch: # Allows manual trigger
 
 jobs:
-  generate:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/checkout@v3
         with:
-          node-version: 18
-      - name: Run Engine
-env:
+          node-version: '18'
+
+      - name: Run Bulletin Engine
+        run: node engine.js
+        env:
           AZ_URL: ${{ secrets.AZ_URL }}
           AZ_KEY: ${{ secrets.AZ_KEY }}
           AZ_STATION_ID: ${{ secrets.AZ_STATION_ID }}
@@ -22,4 +29,3 @@ env:
           WP_URL: ${{ secrets.WP_URL }}
           WP_USER: ${{ secrets.WP_USER }}
           WP_APP_PASS: ${{ secrets.WP_APP_PASS }}
-        run: node engine.js
