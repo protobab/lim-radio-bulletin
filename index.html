@@ -53,27 +53,42 @@
             l.innerHTML += `<div>> ${msg}</div>`;
             l.scrollTop = l.scrollHeight;
         };
+async function fetchNews() {
+    log("Fetching Nigerian news headlines...");
+    const feeds = document.getElementById('rss-feeds').value.split('\n').filter(url => url.trim());
+    // We switched to corsproxy.io for better compatibility
+    const proxy = "https://corsproxy.io/?url="; 
+    let allStories = "";
 
-        async function fetchNews() {
-            log("Fetching news headlines...");
-            const feeds = document.getElementById('rss-feeds').value.split('\n').filter(url => url.trim());
-            const proxy = "https://api.allorigins.win/raw?url="; // Free CORS proxy
-            let allStories = "";
-
-            for (let url of feeds) {
-                try {
-                    const res = await fetch(proxy + encodeURIComponent(url));
-                    const text = await res.text();
-                    const parser = new DOMParser();
-                    const xml = parser.parseFromString(text, "text/xml");
-                    const items = xml.querySelectorAll("item");
-                    items.forEach((item, i) => {
-                        if (i < 3) allStories += item.querySelector("title").textContent + ". ";
-                    });
-                } catch (e) { log("Error fetching " + url); }
-            }
-            return allStories;
+    for (let url of feeds) {
+        try {
+            const res = await fetch(proxy + encodeURIComponent(url.trim()));
+            if (!res.ok) throw new Error("Blocked");
+            
+            const text = await res.text();
+            const parser = new DOMParser();
+            const xml = parser.parseFromString(text, "text/xml");
+            const items = xml.querySelectorAll("item");
+            
+            let count = 0;
+            items.forEach((item) => {
+                if (count < 3) {
+                    const title = item.querySelector("title").textContent;
+                    allStories += title + ". ";
+                    count++;
+                }
+            });
+            log("✅ Loaded: " + url.split('/')[2]);
+        } catch (e) { 
+            log("⚠️ Skipping " + url.split('/')[2] + " (Site protected)"); 
         }
+    }
+    
+    if (allStories.length < 50) {
+        throw new Error("No news could be fetched. Try different RSS links.");
+    }
+    return allStories;
+}
 
         async function generateScript(news) {
             log("Writing script with GPT-4o-mini...");
