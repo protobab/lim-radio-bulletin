@@ -6,21 +6,20 @@ on:
   workflow_dispatch:
 
 jobs:
-  sync-music:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    permissions:
+      contents: write # Allows GitHub to save the file
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4 # Updated version
-
-      - name: Setup Node
-        uses: actions/setup-node@v4 # Updated version
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '24' # Using the newest Node version
-
-      - name: Run Music Sync
-        run: node music_sync.js
-        env:
-          AZ_URL: ${{ secrets.AZ_URL }}
-          AZ_KEY: ${{ secrets.AZ_KEY }}
-          AZ_STATION_ID: ${{ secrets.AZ_STATION_ID }}
+          node-version: '20'
+      - run: node music_engine.js
+      - name: Commit and Push M3U
+        run: |
+          git config --global user.name "Abiola Hassan Chidi"
+          git config --global user.email "bot@livesinmotion.com"
+          git add *.m3u
+          git commit -m "Refresh Daily Music" || exit 0
+          git push
