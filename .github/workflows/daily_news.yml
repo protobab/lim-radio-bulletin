@@ -1,0 +1,22 @@
+name: Run Daily Bulletin
+on:
+  schedule:
+    - cron: '0 6,12,16,20 * * *' # Runs at 6am, 12pm, 4pm, 8pm UTC
+  workflow_dispatch: # Allows you to run it manually for testing
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Run Engine
+        env:
+          AZ_URL: ${{ secrets.AZ_URL }}
+          AZ_KEY: ${{ secrets.AZ_KEY }}
+          AZ_STATION_ID: ${{ secrets.AZ_STATION_ID }}
+          AZ_PLAYLIST_ID: ${{ secrets.AZ_PLAYLIST_ID }}
+          OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+        run: node engine.js
