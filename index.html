@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIM Bulletin Engine (GitHub Edition)</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f4f4f9; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        label { display: block; margin: 10px 0 5px; font-weight: bold; font-size: 14px; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { background: #1C5E37; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
+        button:disabled { background: #ccc; }
+        #log { background: #222; color: #0f0; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px; height: 150px; overflow-y: auto; }
+        .status-msg { padding: 10px; margin-top: 10px; border-radius: 4px; display: none; }
+    </style>
+</head>
+<body>
+
+    <h1>LIM Daily News — Bulletin Engine</h1>
+    <p>GitHub Pages Edition · Zero-Server Setup</p>
+
+    <div class="card">
+        <h3>1. API Configuration</h3>
+        <label>OpenAI API Key</label>
+        <input type="password" id="openai-key" placeholder="sk-...">
+        <p style="font-size: 12px; color: #666;">This key is used for both script writing (GPT-4o-mini) and Voice (TTS-1). Cost: ~$0.04 per bulletin.</p>
+    </div>
+
+    <div class="card">
+        <h3>2. News & Voice Settings</h3>
+        <label>RSS Feeds (One per line)</label>
+        <textarea id="rss-feeds" rows="4">https://feeds.bbci.co.uk/news/world/rss.xml</textarea>
+        
+        <label>Voice Tone</label>
+        <select id="voice">
+            <option value="onyx">Onyx (Deep, Authoritative)</option>
+            <option value="echo">Echo (Neutral)</option>
+            <option value="nova">Nova (Energetic)</option>
+        </select>
+    </div>
+
+    <div class="card">
+        <button id="run-btn" onclick="runEngine()">Generate & Play Bulletin</button>
+        <div id="status" class="status-msg"></div>
+        <div id="log">System ready...</div>
+        <audio id="player" controls style="width: 100%; margin-top: 15px; display: none;"></audio>
+    </div>
+
+    <script>
+        const log = (msg) => {
+            const l = document.getElementById('log');
+            l.innerHTML += `<div>> ${msg}</div>`;
+            l.scrollTop = l.scrollHeight;
+        };
+
+        async function fetchNews() {
+            log("Fetching news headlines...");
+            const feeds = document.getElementById('rss-feeds').value.split('\n').filter(url => url.trim());
+            const proxy = "https://api.allorigins.win/raw?url="; // Free CORS proxy
+            let allStories = "";
+
+            for (let url of feeds) {
+                try {
+                    const res = await fetch(proxy + encodeURIComponent(url));
+                    const text = await res.text();
+                    const parser = new DOMParser();
+                    const xml = parser.parseFromString(text, "text/xml");
+                    const items = xml.querySelectorAll("item");
+                    items.forEach((item, i) => {
+                        if (i < 3) allStories += item.querySelector("title").textContent + ". ";
+                    });
+                } catch (e) { log("Error fetching " + url); }
+            }
+            return allStories;
+        }
+
+        async function generateScript(news) {
+            log("Writing script with GPT-4o-mini...");
+            const key = document.getElementById('openai-key').value;
+            const res = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+                body: JSON.stringify({
+                    model: "gpt-4o-mini",
+                    messages: [{ role: "system", content: "You are a professional radio news anchor. Write a 2-minute news bulletin based on these headlines. Be concise and engaging." },
+                               { role: "user", content: news }]
+                })
+            });
+            const data = await res.json();
+            return data.choices[0].message.content;
+        }
+
+        async function speakScript(script) {
+            log("Synthesizing voice (OpenAI TTS)...");
+            const key = document.getElementById('openai-key').value;
+            const voice = document.getElementById('voice').value;
+            const res = await fetch("https://api.openai.com/v1/audio/speech", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+                body: JSON.stringify({ model: "tts-1", voice: voice, input: script })
+            });
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const player = document.getElementById('player');
+            player.src = url;
+            player.style.display = "block";
+            player.play();
+            log("Success! Playing bulletin.");
+        }
+
+        async function runEngine() {
+            const btn = document.getElementById('run-btn');
+            btn.disabled = true;
+            try {
+                const news = await fetchNews();
+                const script = await generateScript(news);
+                await speakScript(script);
+            } catch (e) {
+                log("Error: " + e.message);
+                alert("Ensure your API key is correct and you have credits.");
+            }
+            btn.disabled = false;
+        }
+    </script>
+</body>
+</html>
