@@ -8,13 +8,18 @@ on:
 jobs:
   sync-music:
     runs-on: ubuntu-latest
-    timeout-minutes: 60 # Extension for 100 songs
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4 # Updated version
+
+      - name: Setup Node
+        uses: actions/setup-node@v4 # Updated version
         with:
-          node-version: '18'
-      - run: node music_sync.js
+          node-version: '24' # Using the newest Node version
+
+      - name: Run Music Sync
+        run: node music_sync.js
         env:
           AZ_URL: ${{ secrets.AZ_URL }}
           AZ_KEY: ${{ secrets.AZ_KEY }}
