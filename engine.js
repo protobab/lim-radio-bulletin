@@ -21,22 +21,33 @@ async function generatePlaylist() {
     for (const q of queries) {
         if (foundCount >= 100) break;
         try {
-            const res = await fetch(`https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)} AND mediatype:(audio)&fl[]=identifier&rows=50&output=json`);
+            // Added a User-Agent so Archive.org doesn't block the request
+            const res = await fetch(`https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)} AND mediatype:(audio)&fl[]=identifier&rows=50&output=json`, {
+                headers: { 'User-Agent': 'LivesInMotionRadio/1.0' }
+            });
+            
             const data = await res.json();
-            const items = data.response.docs;
+            const items = data.response?.docs || [];
 
             for (const item of items) {
                 if (foundCount >= 100) break;
-                // Generate the direct VBR MP3 link
+                // Direct VBR MP3 link
                 const link = `https://archive.org/download/${item.identifier}/${item.identifier}_vbr.mp3`;
                 playlistContent += `#EXTINF:-1,${item.identifier}\n${link}\n`;
                 foundCount++;
             }
-        } catch (e) { console.log(`⚠️ Query failed: ${q}`); }
+        } catch (e) { 
+            console.log(`⚠️ Query failed for ${q}: ${e.message}`); 
+        }
     }
 
-    fs.writeFileSync(fileName, playlistContent);
-    console.log(`✅ Playlist created with ${foundCount} tracks.`);
+    if (foundCount > 0) {
+        fs.writeFileSync(fileName, playlistContent);
+        console.log(`✅ Success! Generated ${fileName} with ${foundCount} tracks.`);
+    } else {
+        console.error("❌ Failed to find any tracks. Check internet connection or queries.");
+        process.exit(1);
+    }
 }
 
 generatePlaylist();
