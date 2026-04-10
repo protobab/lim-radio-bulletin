@@ -1,0 +1,37 @@
+name: Hourly News Bulletin Producer
+on:
+  schedule:
+    - cron: '0 * * * *' # Runs at the top of every hour
+  workflow_dispatch:      # Allows you to click "Run Workflow" to test
+
+jobs:
+  produce-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          pip install openai requests
+
+      - name: Run AI News Script
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python your_bulletin_script.py # Ensure this script saves output as 'bulletin.mp3'
+
+      - name: Upload to AzuraCast Media
+        env:
+          AZURA_KEY: ${{ secrets.AZURACAST_API_KEY }}
+          STATION_ID: "51"
+        run: |
+          # This command uploads and overwrites 'bulletin.mp3' in your AzuraCast media folder
+          curl --location --request POST "https://azuracast-nuremberg.myautodj.com/api/station/${{ env.STATION_ID }}/files/upload" \
+          --header "X-API-Key: ${{ env.AZURA_KEY }}" \
+          --form 'path="bulletin.mp3"' \
+          --form 'file=@"bulletin.mp3"'
