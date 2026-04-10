@@ -1,41 +1,38 @@
-name: Daily News Bulletin
-
+name: Hourly News Bulletin Producer
 on:
   schedule:
-    - cron: '0 6,12,16,20 * * *' # 7am, 1pm, 5pm, 9pm WAT
-  workflow_dispatch: # Allows manual trigger
+    - cron: '0 * * * *' # Runs at the top of every hour
+  workflow_dispatch:      # Allows manual testing
 
 jobs:
-  build:
+  produce-and-upload:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          node-version: '18'
+          python-version: '3.9'
 
-      - name: Run Bulletin Engine
-        run: node engine.js
+      - name: Install Dependencies
+        run: |
+          pip install openai requests
+
+      - name: Run AI News Script
         env:
-          AZ_URL: ${{ secrets.AZ_URL }}
-          AZ_KEY: ${{ secrets.AZ_KEY }}
-          AZ_STATION_ID: ${{ secrets.AZ_STATION_ID }}
-          AZ_PLAYLIST_ID: ${{ secrets.AZ_PLAYLIST_ID }}
-          OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
-          WP_URL: ${{ secrets.WP_URL }}
-          WP_USER: ${{ secrets.WP_USER }}
-          WP_APP_PASS: ${{ secrets.WP_APP_PASS }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          mkdir -p output
+          python your_bulletin_script.py
 
-- name: Upload to AzuraCast
-  env:
-    AZURA_KEY: ${{ secrets.083d81f9269afb72:16b990c979926a32f67273c6329b1eb2 }}
-    STATION_ID: 51 # Your Station ID
-  run: |
-    curl --location --request POST 'https://azuracast-nuremberg.myautodj.com/api/station/${{ env.STATION_ID }}/files/upload' \
-    --header "X-API-Key: ${{ env.AZURA_KEY }}" \
-    --form 'path="bulletin.mp3"' \
-    --form 'file=@"output/bulletin.mp3"'
+      - name: Upload to AzuraCast Media
+        env:
+          AZURA_KEY: ${{ secrets.AZURACAST_API_KEY }}
+          STATION_ID: "51"
+        run: |
+          curl --location --request POST "https://azuracast-nuremberg.myautodj.com/api/station/${{ env.STATION_ID }}/files/upload" \
+          --header "X-API-Key: ${{ env.AZURA_KEY }}" \
+          --form 'path="bulletin.mp3"' \
+          --form 'file=@"bulletin.mp3"'
