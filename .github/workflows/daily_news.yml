@@ -29,3 +29,13 @@ jobs:
           WP_URL: ${{ secrets.WP_URL }}
           WP_USER: ${{ secrets.WP_USER }}
           WP_APP_PASS: ${{ secrets.WP_APP_PASS }}
+
+- name: Upload to AzuraCast
+  env:
+    AZURA_KEY: ${{ secrets.083d81f9269afb72:16b990c979926a32f67273c6329b1eb2 }}
+    STATION_ID: 51 # Your Station ID
+  run: |
+    curl --location --request POST 'https://azuracast-nuremberg.myautodj.com/api/station/${{ env.STATION_ID }}/files/upload' \
+    --header "X-API-Key: ${{ env.AZURA_KEY }}" \
+    --form 'path="bulletin.mp3"' \
+    --form 'file=@"output/bulletin.mp3"'
