@@ -1,20 +1,20 @@
 name: Hourly News Bulletin Producer
 on:
   schedule:
-    - cron: '0 * * * *' # Runs at the top of every hour
-  workflow_dispatch:      # Allows you to click "Run Workflow" to test
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
   produce-and-upload:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Updated to v4 for Node 24 support
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5 # Updated to v5
         with:
-          python-version: '3.9'
+          python-version: '3.11'
 
       - name: Install Dependencies
         run: |
@@ -23,14 +23,24 @@ jobs:
       - name: Run AI News Script
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python your_bulletin_script.py # Ensure this script saves output as 'bulletin.mp3'
+        run: |
+          # Ensure your python script saves the file as 'bulletin.mp3' in the root folder
+          python your_bulletin_script.py 
+
+      - name: Verify Bulletin Exists
+        run: |
+          if [ -f "bulletin.mp3" ]; then
+            echo "File generated successfully."
+          else
+            echo "Error: bulletin.mp3 was not found! Check your Python script output."
+            exit 1
+          fi
 
       - name: Upload to AzuraCast Media
         env:
           AZURA_KEY: ${{ secrets.AZURACAST_API_KEY }}
           STATION_ID: "51"
         run: |
-          # This command uploads and overwrites 'bulletin.mp3' in your AzuraCast media folder
           curl --location --request POST "https://azuracast-nuremberg.myautodj.com/api/station/${{ env.STATION_ID }}/files/upload" \
           --header "X-API-Key: ${{ env.AZURA_KEY }}" \
           --form 'path="bulletin.mp3"' \
